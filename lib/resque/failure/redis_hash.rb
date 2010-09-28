@@ -15,8 +15,8 @@ module Resque
           :worker    => worker.to_s,
           :queue     => queue
         }
-        data = Resque.encode(data+Time.now.usec.to_s)
-        id   = Digest::MD5.hexdigest(data)
+        data = Resque.encode(data)
+        id   = Digest::MD5.hexdigest(data+Time.now.usec.to_s)
         Resque.redis.pipelined do
           Resque.redis.hset(:failed_jobs, id, data)
           Resque.redis.rpush(:failed,     id)
