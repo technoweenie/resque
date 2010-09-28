@@ -24,20 +24,24 @@ module Resque
       end
 
       def self.all(start = 0, count = 1)
-        ids = [Resque.redis.lrange(:failed, start, count)]
-        ids.flatten!
-        items = Resque.redis.hmget(:failed_jobs, *ids) || []
-        items.map! do |item|
-          Resque.decode(item)
+        if count == 1
+          id   = Resque.redis.lindex(:failed, start)
+          item = Resque.redis.hget(:failed_jobs, id)
+          Resque.decode(item).update('failure_id' => id)
+        else
+          ids = Resque.redis.lrange(:failed, start, start+count-1)
+          # HMGET is being a jerk.  Investigate!
+          #items = Resque.redis.hmget(:failed_jobs, *ids)
+          ids.map! do |id|
+            item = Resque.redis.hget(:failed_jobs, id)
+            Resque.decode(item).update('failure_id' => id)
+          end
         end
-        items.compact!
-        items
       end
 
       def self.requeue(index)
-        id   = all(index)
-        item = Resque.redis.hget(:failed_jobs, id)
-        item = Resque.decode(item)
+        item = all(index)
+        id   = item.delete('failure_id')
         item['retried_at'] = Time.now.strftime("%Y/%m/%d %H:%M:%S")
         Resque.redis.hset(:failed_jobs, id, Resque.encode(item))
         Job.create(item['queue'], item['payload']['class'], *item['payload']['args'])
